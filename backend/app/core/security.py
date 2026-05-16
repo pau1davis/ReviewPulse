@@ -1,28 +1,59 @@
 import hashlib
 import hmac
 
-from jose import JWTError, jwt
+import httpx
+from jose import JWTError, jwk, jwt
 from jose.exceptions import ExpiredSignatureError
 
 from app.core.config import settings
+
+# In-memory cache for Supabase JWKS public keys (they rarely rotate)
+_jwks_cache: list[dict] | None = None
+
+
+def _get_jwks_keys() -> list[dict]:
+    global _jwks_cache
+    if _jwks_cache is None:
+        url = f"{settings.supabase_url.strip()}/auth/v1/.well-known/jwks.json"
+        resp = httpx.get(url, timeout=5)
+        resp.raise_for_status()
+        _jwks_cache = resp.json().get("keys", [])
+    return _jwks_cache
 
 
 # ── JWT verification ───────────────────────────────────────────────────────────
 
 def verify_supabase_jwt(token: str) -> dict:
     """
-    Decode and verify a Supabase Auth JWT using the project's JWT secret.
-    The secret is found at: Supabase dashboard → Project Settings → API → JWT Settings.
-
-    Raises ValueError on invalid or expired tokens.
+    Decode and verify a Supabase Auth JWT.
+    Supports HS256 (legacy projects) and ES256 (new projects, asymmetric signing).
     """
     try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg", "HS256")
+
+        if alg == "HS256":
+            payload = jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+        else:
+            # ES256: verify with Supabase's public key from JWKS endpoint
+            kid = header.get("kid")
+            keys = _get_jwks_keys()
+            key_data = next((k for k in keys if k.get("kid") == kid), None)
+            if not key_data:
+                raise ValueError(f"No JWKS key found for kid={kid!r}")
+            public_key = jwk.construct(key_data, algorithm="ES256")
+            payload = jwt.decode(
+                token,
+                public_key,
+                algorithms=["ES256"],
+                audience="authenticated",
+            )
+
         return payload
     except ExpiredSignatureError:
         raise ValueError("Token has expired.")
@@ -37,6 +68,7 @@ def extract_supabase_user_id(token: str) -> str:
     if not user_id:
         raise ValueError("Token is missing the 'sub' claim.")
     return user_id
+
 
 
 # ── Webhook signature ──────────────────────────────────────────────────────────

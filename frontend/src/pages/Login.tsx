@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useState, useEffect, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { BookOpen } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { ApiError } from "@/lib/api";
@@ -16,10 +16,12 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Already authenticated — skip the login page entirely.
-  if (!isLoading && token) {
-    return <Navigate to="/" replace />;
-  }
+  // Redirect once token is available (handles both initial load and post-login).
+  useEffect(() => {
+    if (!isLoading && token) {
+      navigate("/", { replace: true });
+    }
+  }, [token, isLoading, navigate]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -32,7 +34,7 @@ export default function Login() {
       } else {
         await register(email, password);
       }
-      navigate("/", { replace: true });
+      // Navigation is handled by the `if (!isLoading && token)` guard above.
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

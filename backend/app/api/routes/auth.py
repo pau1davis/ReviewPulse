@@ -6,6 +6,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -128,7 +129,9 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     supabase_user_id = data["user"]["id"]
 
     result = await db.execute(
-        select(Author).where(Author.supabase_user_id == supabase_user_id)
+        select(Author)
+        .where(Author.supabase_user_id == supabase_user_id)
+        .options(selectinload(Author.session_info))
     )
     author = result.scalar_one_or_none()
     if not author:
