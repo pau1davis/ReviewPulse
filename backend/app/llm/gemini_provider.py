@@ -21,7 +21,17 @@ _DEFAULT_PRICING = {"input": 0.075, "output": 0.30}
 _SYSTEM_PROMPT = (
     "You are an expert literary analyst helping independent authors understand "
     "their book reviews. Analyse the review carefully and return a JSON object "
-    "matching the provided schema. Be precise and consistent."
+    "with exactly these fields:\n"
+    "  sentiment: one of 'positive', 'mixed', 'negative'\n"
+    "  sentiment_confidence: float between 0 and 1\n"
+    "  themes: list of strings (pacing, characters, ending, cover, narration, "
+    "plot, writing_style, world_building, price, length, humor, romance, mystery — "
+    "add others if clearly present)\n"
+    "  is_ai_generated: boolean\n"
+    "  ai_generated_confidence: float between 0 and 1\n"
+    "  summary: one sentence summarising the review from the author's perspective\n"
+    "  is_actionable: boolean — true if the author could respond to or address this\n"
+    "Return only the JSON object, no extra text."
 )
 
 _USER_PROMPT = """\
@@ -70,7 +80,6 @@ class GeminiProvider(LLMProvider):
             system_instruction=_SYSTEM_PROMPT,
             generation_config=genai.GenerationConfig(
                 response_mime_type="application/json",
-                response_schema=ReviewAnalysisResult,
                 temperature=0.1,
             ),
         )

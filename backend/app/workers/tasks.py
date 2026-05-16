@@ -13,7 +13,22 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.config import settings
 from app.db.models import Book, IngestionJob, Review, ReviewAnalysis, WebhookEndpoint
-from app.db.session import AsyncSessionLocal
+from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from app.core.config import settings as _settings
+
+# Celery workers use asyncio.run() which creates a new event loop per task.
+# NullPool avoids "Future attached to a different loop" by never reusing connections.
+_celery_engine = create_async_engine(
+    _settings.database_url,
+    poolclass=NullPool,
+    echo=False,
+)
+AsyncSessionLocal = async_sessionmaker(
+    bind=_celery_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 from app.llm.base import get_llm_provider
 from app.workers.celery_app import celery_app
 
