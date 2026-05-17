@@ -172,6 +172,25 @@ export default function Dashboard() {
       for (const jobId of activeJobs) {
         try {
           const s = await api.jobs.status(tokenRef.current!, jobId);
+          // Update in-place so progress counter reflects real-time state
+          setBooks((prev) =>
+            prev.map((b) =>
+              b.metrics.latest_job?.job_id === jobId
+                ? {
+                    ...b,
+                    metrics: {
+                      ...b.metrics,
+                      latest_job: {
+                        ...b.metrics.latest_job!,
+                        status: s.status,
+                        reviews_processed: s.reviews_processed,
+                        reviews_found: s.reviews_found,
+                      },
+                    },
+                  }
+                : b
+            )
+          );
           if (s.status !== "queued" && s.status !== "running") {
             anyFinished = true;
           }
