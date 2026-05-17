@@ -73,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(AUTHOR_ID_KEY);
+    localStorage.removeItem("rp_books_cache");
     setState({ token: null, authorId: null, isLoading: false });
   }, []);
 

@@ -101,15 +101,36 @@ function BookCard({ book }: { book: Book }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
+const BOOKS_CACHE_KEY = "rp_books_cache";
+
+function getCachedBooks(): Book[] {
+  try {
+    const raw = localStorage.getItem(BOOKS_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as Book[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setCachedBooks(books: Book[]) {
+  try {
+    localStorage.setItem(BOOKS_CACHE_KEY, JSON.stringify(books));
+  } catch {
+    // storage quota exceeded — ignore
+  }
+}
+
 export default function Dashboard() {
   const { token, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [books, setBooks] = useState<Book[]>([]);
+  // Pre-populate from cache so the page renders immediately on return visits
+  const [books, setBooks] = useState<Book[]>(() => getCachedBooks());
   const [sinceLogin, setSinceLogin] = useState<SinceLastLoginResponse | null>(
     null,
   );
-  const [loading, setLoading] = useState(true);
+  // If we have cached data, skip the full-page spinner
+  const [loading, setLoading] = useState(() => getCachedBooks().length === 0);
   const [pageError, setPageError] = useState<string | null>(null);
 
   // Add-book form state
@@ -133,6 +154,7 @@ export default function Dashboard() {
     try {
       const data = await api.books.list(tokenRef.current!);
       setBooks(data);
+      setCachedBooks(data);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         handleAuthError();
@@ -142,10 +164,13 @@ export default function Dashboard() {
     }
   }, [handleAuthError]);
 
-  // Initial load
+  // Initial load — stale-while-revalidate: cached data is already shown,
+  // so we only block on the spinner when there's nothing cached yet.
   useEffect(() => {
     async function init() {
-      setLoading(true);
+      const hasCached = getCachedBooks().length > 0;
+      if (!hasCached) setLoading(true);
+
       await Promise.all([
         loadBooks(),
         api
