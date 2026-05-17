@@ -2,8 +2,8 @@ ReviewPulse — Submission Writeup
 ================================
 Tweeds Full-Stack Engineering Intern Take-Home
 
-GitHub repo:   https://github.com/[YOUR_GITHUB_USERNAME]/reviewpulse
-Deployed URL:  [TODO — deploy to Render + Vercel before submitting]
+GitHub repo:   https://github.com/pau1davis/ReviewPulse
+Deployed URL:  https://review-pulse-f1wnpivue-review-pulse.vercel.app
 Hours spent:   [TODO — fill in your honest total]
 
 
