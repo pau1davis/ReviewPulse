@@ -263,15 +263,6 @@ async def _run_ingest_book(job_id: str, book_id: str) -> None:
                     cost_usd=round(cost, 6),
                 )
 
-            # Update progress after each review so the UI reflects real-time progress
-            async with AsyncSessionLocal() as progress_session:
-                await progress_session.execute(
-                    update(IngestionJob)
-                    .where(IngestionJob.id == uuid.UUID(job_id))
-                    .values(reviews_processed=processed)
-                )
-                await progress_session.commit()
-
             except Exception as exc:
                 await session.rollback()
                 failed += 1
@@ -281,6 +272,15 @@ async def _run_ingest_book(job_id: str, book_id: str) -> None:
                     external_id=external_id,
                     error=str(exc),
                 )
+
+        # Update progress after each review so the UI reflects real-time progress
+        async with AsyncSessionLocal() as progress_session:
+            await progress_session.execute(
+                update(IngestionJob)
+                .where(IngestionJob.id == uuid.UUID(job_id))
+                .values(reviews_processed=processed)
+            )
+            await progress_session.commit()
 
     # Finalise job
     async with AsyncSessionLocal() as session:
