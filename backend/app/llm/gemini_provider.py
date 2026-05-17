@@ -108,17 +108,28 @@ class GeminiProvider(LLMProvider):
     # ── Embeddings ────────────────────────────────────────────────────────────
 
     async def embed_text(self, text: str) -> list[float]:
-        """Google text-embedding-004 — 768 dims, free tier."""
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: genai.embed_content(
-                model="models/text-embedding-004",
-                content=text,
-                task_type="RETRIEVAL_DOCUMENT",
-            ),
-        )
-        return result["embedding"]
+        """Google gemini-embedding-001 via v1 REST API — 768 dims, free tier.
+
+        text-embedding-004 was renamed to gemini-embedding-001.
+        google-generativeai >=0.8 uses v1beta for embed_content, so we call
+        the REST API directly with httpx to stay on v1.
+        """
+        import httpx
+
+        url = "https://generativelanguage.googleapis.com/v1/models/gemini-embedding-001:embedContent"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(
+                url,
+                params={"key": settings.gemini_api_key},
+                json={
+                    "model": "models/gemini-embedding-001",
+                    "content": {"parts": [{"text": text}]},
+                    "taskType": "RETRIEVAL_DOCUMENT",
+                    "outputDimensionality": 768,
+                },
+            )
+            r.raise_for_status()
+            return r.json()["embedding"]["values"]
 
     # ── Cost estimation ────────────────────────────────────────────────────────
 

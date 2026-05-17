@@ -124,9 +124,14 @@ async def weekly_digest(
     this_pos, this_neg = _sentiment_counts(this_week)
     prev_pos, prev_neg = _sentiment_counts(prev_week)
 
-    if this_pos - this_neg > prev_pos - prev_neg + 1:
+    this_total = len(this_week)
+    prev_total = len(prev_week)
+    this_rate = (this_pos - this_neg) / this_total if this_total else 0.0
+    prev_rate = (prev_pos - prev_neg) / prev_total if prev_total else 0.0
+
+    if this_rate > prev_rate + 0.1:
         sentiment_shift = "improving"
-    elif this_neg - this_pos > prev_neg - prev_pos + 1:
+    elif this_rate < prev_rate - 0.1:
         sentiment_shift = "declining"
     else:
         sentiment_shift = "stable"
