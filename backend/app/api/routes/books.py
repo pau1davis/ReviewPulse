@@ -168,6 +168,37 @@ async def add_book(
     )
 
 
+class ReIngestResponse(BaseModel):
+    job_id: str
+
+
+@router.post("/{book_id}/ingest", response_model=ReIngestResponse, status_code=status.HTTP_202_ACCEPTED)
+async def reingest_book(
+    book_id: str,
+    author: Author = Depends(get_current_author),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-queue an ingestion job for an existing book (e.g. to recover a stuck job)."""
+    result = await db.execute(
+        select(Book).where(
+            Book.id == uuid.UUID(book_id),
+            Book.author_id == author.id,
+        )
+    )
+    book = result.scalar_one_or_none()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    job = IngestionJob(book_id=book.id)
+    db.add(job)
+    await db.flush()
+    await db.commit()
+
+    ingest_book.delay(str(job.id), str(book.id))
+    log.info("book.reingest", book_id=book_id, job_id=str(job.id))
+    return ReIngestResponse(job_id=str(job.id))
+
+
 @router.get("", response_model=list[BookResponse])
 async def list_books(
     author: Author = Depends(get_current_author),
