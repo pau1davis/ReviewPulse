@@ -27,6 +27,9 @@ class Settings(BaseSettings):
 
     # Security
     webhook_secret: str
+    # Comma-separated list of allowed CORS origins.
+    # In production set to your Vercel URL, e.g. https://reviewpulse.vercel.app
+    allowed_origins: str = "http://localhost:5173"
 
     # Celery
     celery_broker_url: str = "redis://localhost:6379/0"

@@ -149,7 +149,10 @@ export interface SinceLastLoginResponse {
 
 // ── API client ────────────────────────────────────────────────────────────────
 
-const BASE = "/api";
+// In dev: Vite proxies /api → localhost:8000 (see vite.config.ts).
+// In production: VITE_API_URL should be the full backend URL, e.g.
+// https://reviewpulse-api.onrender.com (no trailing slash).
+const BASE = import.meta.env.VITE_API_URL ?? "/api";
 
 class ApiError extends Error {
   constructor(

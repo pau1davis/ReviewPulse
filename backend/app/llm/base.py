@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
+
 
 # ── Structured output schema ───────────────────────────────────────────────────
 # Every LLM provider must return a response that validates against this model.
@@ -80,8 +82,6 @@ def get_llm_provider() -> LLMProvider:
     Returns the configured LLM provider based on settings.llm_provider.
     Import this instead of importing a concrete provider directly.
     """
-    from app.core.config import settings
-
     provider = settings.llm_provider.lower()
 
     if provider == "groq":

@@ -19,7 +19,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Make startup script executable
+RUN chmod +x start.sh
+
 EXPOSE 8000
 
-# Default command — overridden per-service in docker-compose.yml
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Production: runs Celery worker in background + uvicorn in foreground.
+# Override per-service in docker-compose.yml for local dev.
+CMD ["./start.sh"]

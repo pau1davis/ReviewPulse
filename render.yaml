@@ -1,0 +1,61 @@
+# render.yaml — Infrastructure-as-Code for Render.com
+# Deploys one Web Service (FastAPI + Celery worker via start.sh).
+#
+# One-time setup:
+#   1. Push this repo to GitHub.
+#   2. Go to render.com → New → Blueprint → connect repo.
+#   3. Fill in the environment variables marked sync: false below.
+#   4. Deploy.
+#
+# Redis: provision a free Upstash Redis instance at upstash.com and paste
+# the rediss:// URL into REDIS_URL, CELERY_BROKER_URL, and CELERY_RESULT_BACKEND.
+
+services:
+  - type: web
+    name: reviewpulse-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # start.sh (the CMD) launches celery worker + uvicorn
+    healthCheckPath: /docs
+    autoDeploy: true
+    envVars:
+      # ── Supabase ──────────────────────────────────────────────────────────
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false   # postgresql+asyncpg:// URI from Supabase
+
+      # ── Redis (Upstash free tier) ─────────────────────────────────────────
+      - key: REDIS_URL
+        sync: false   # rediss://... from Upstash
+      - key: CELERY_BROKER_URL
+        sync: false   # same as REDIS_URL
+      - key: CELERY_RESULT_BACKEND
+        sync: false   # same as REDIS_URL (or a different DB index)
+
+      # ── LLM ──────────────────────────────────────────────────────────────
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-2.5-flash
+
+      # ── Security ──────────────────────────────────────────────────────────
+      - key: WEBHOOK_SECRET
+        generateValue: true   # Render generates a random value
+
+      # ── App ──────────────────────────────────────────────────────────────
+      - key: ALLOWED_ORIGINS
+        sync: false   # comma-separated: https://your-app.vercel.app,https://reviewpulse.vercel.app
+      - key: LOG_JSON
+        value: "true"
+      - key: LOG_LEVEL
+        value: "INFO"
