@@ -39,10 +39,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true, // true until we've checked localStorage
   });
 
-  // Hydrate from localStorage on mount
+  // Hydrate from localStorage on mount.
+  // Decode the JWT exp claim (no crypto needed — just base64 the payload) and
+  // discard it immediately if expired. This prevents the flash of "logged in →
+  // kicked to /login" that happens when the first API call returns 401.
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     const authorId = localStorage.getItem(AUTHOR_ID_KEY);
+
+    if (token && authorId) {
+      try {
+        const payload = JSON.parse(
+          atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")),
+        );
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        if (payload.exp && payload.exp < nowSeconds) {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(AUTHOR_ID_KEY);
+          setState({ token: null, authorId: null, isLoading: false });
+          return;
+        }
+      } catch {
+        // Malformed token — clear it
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(AUTHOR_ID_KEY);
+        setState({ token: null, authorId: null, isLoading: false });
+        return;
+      }
+    }
+
     setState({ token, authorId, isLoading: false });
   }, []);
 
