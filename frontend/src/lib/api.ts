@@ -147,6 +147,12 @@ export interface SinceLastLoginResponse {
   review_count_by_book: Record<string, number>;
 }
 
+export interface DraftReplyResponse {
+  review_id: string;
+  reply: string;
+  tone: "professional" | "warm" | "empathetic";
+}
+
 // ── API client ────────────────────────────────────────────────────────────────
 
 // In dev: Vite proxies /api → localhost:8000 (see vite.config.ts).
@@ -251,6 +257,11 @@ export const api = {
         token,
       );
     },
+
+    draftReply: (token: string, reviewId: string) =>
+      request<DraftReplyResponse>(`/reviews/${reviewId}/draft-reply`, {
+        method: "POST",
+      }, token),
   },
 
   // ── Trends ───────────────────────────────────────────────────────────────────

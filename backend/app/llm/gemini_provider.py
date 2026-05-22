@@ -6,7 +6,7 @@ import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 
 from app.core.config import settings
-from app.llm.base import LLMProvider, ReviewAnalysisResult
+from app.llm.base import DraftReplyResult, LLMProvider, ReviewAnalysisResult
 
 log = structlog.get_logger(__name__)
 
@@ -17,6 +17,20 @@ _GEMINI_PRICING: dict[str, dict[str, float]] = {
     "gemini-1.5-pro":    {"input": 1.25,  "output": 5.00},
 }
 _DEFAULT_PRICING = {"input": 0.075, "output": 0.30}
+
+_DRAFT_REPLY_SYSTEM = (
+    "You are an author's personal PR assistant. Write a brief, gracious public reply "
+    "to a book review on behalf of the author. Guidelines:\n"
+    "- Be warm, professional, and never defensive\n"
+    "- Acknowledge specific points the reviewer raised\n"
+    "- Keep it to 80-120 words (short enough for Amazon/Goodreads)\n"
+    "- Write in first person as the author\n"
+    "- End on a positive note\n"
+    "Return a JSON object with exactly these fields:\n"
+    "  reply: the full reply text\n"
+    '  tone: one of \"professional\", \"warm\", \"empathetic\" (whichever best describes this reply)\n'
+    "Return only the JSON object, no extra text."
+)
 
 _SYSTEM_PROMPT = (
     "You are an expert literary analyst helping independent authors understand "
@@ -104,6 +118,26 @@ class GeminiProvider(LLMProvider):
         )
 
         return ReviewAnalysisResult.model_validate(json.loads(raw))
+
+    # ── Draft reply ───────────────────────────────────────────────────────────
+
+    async def draft_reply(self, review_text: str, book_title: str) -> DraftReplyResult:
+        prompt = f"Book title: '{book_title}'\n\nReview to reply to:\n{review_text}"
+        draft_model = genai.GenerativeModel(
+            model_name=self._model_name,
+            system_instruction=_DRAFT_REPLY_SYSTEM,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+                temperature=0.7,
+            ),
+        )
+
+        async def _call():
+            return await draft_model.generate_content_async(prompt)
+
+        response = await _with_backoff(_call)
+        log.info("llm.draft_reply.complete", model=self._model_name)
+        return DraftReplyResult.model_validate(json.loads(response.text))
 
     # ── Embeddings ────────────────────────────────────────────────────────────
 

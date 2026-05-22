@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Reply,
   Zap,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -66,6 +67,29 @@ function ReviewsTab({ bookId, token }: { bookId: string; token: string }) {
   const [sortBy, setSortBy] = useState("review_date");
   const [sortOrder, setSortOrder] = useState("desc");
   const [page, setPage] = useState(1);
+
+  // Draft reply state
+  const [draftLoading, setDraftLoading] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [openDraft, setOpenDraft] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  async function handleDraftReply(reviewId: string) {
+    if (drafts[reviewId]) {
+      setOpenDraft(openDraft === reviewId ? null : reviewId);
+      return;
+    }
+    setDraftLoading(reviewId);
+    try {
+      const res = await api.reviews.draftReply(token, reviewId);
+      setDrafts((prev) => ({ ...prev, [reviewId]: res.reply }));
+      setOpenDraft(reviewId);
+    } catch {
+      // silent fail — button re-enables
+    } finally {
+      setDraftLoading(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -243,6 +267,53 @@ function ReviewsTab({ bookId, token }: { bookId: string; token: string }) {
                           {t}
                         </span>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Draft reply — only on actionable reviews */}
+              {review.analysis?.is_actionable && (
+                <div className="mt-3 border-t border-border pt-3">
+                  {openDraft !== review.id ? (
+                    <button
+                      onClick={() => handleDraftReply(review.id)}
+                      disabled={draftLoading === review.id}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                    >
+                      {draftLoading === review.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Reply className="h-3 w-3" />
+                      )}
+                      {drafts[review.id] ? "View draft reply" : "Draft a reply"}
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          AI-drafted reply — edit before posting
+                        </span>
+                        <button
+                          onClick={() => setOpenDraft(null)}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <p className="rounded-md bg-muted p-3 text-sm leading-relaxed whitespace-pre-wrap">
+                        {drafts[review.id]}
+                      </p>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(drafts[review.id]);
+                          setCopiedId(review.id);
+                          setTimeout(() => setCopiedId(null), 2000);
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {copiedId === review.id ? "✓ Copied" : "Copy to clipboard"}
+                      </button>
                     </div>
                   )}
                 </div>

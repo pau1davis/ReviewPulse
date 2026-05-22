@@ -7,10 +7,14 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import structlog
+
 from app.api.deps import get_current_author
 from app.db.models import Author, Book, Review, ReviewAnalysis
 from app.db.session import get_db
+from app.llm.base import get_llm_provider
 
+log = structlog.get_logger(__name__)
 router = APIRouter(tags=["reviews"])
 
 
@@ -151,3 +155,59 @@ async def list_reviews(
         )
 
     return PaginatedReviews(total=total, page=page, page_size=page_size, results=results)
+
+
+# ── Draft reply endpoint (P1 — product instinct feature) ───────────────────────────
+
+class DraftReplyResponse(BaseModel):
+    review_id: str
+    reply: str
+    tone: str
+
+
+@router.post("/reviews/{review_id}/draft-reply", response_model=DraftReplyResponse)
+async def draft_reply(
+    review_id: str,
+    author: Author = Depends(get_current_author),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    P1 (product instinct): Generate a draft public reply for an actionable review.
+
+    The spec flags reviews as actionable but leaves authors staring at a 1-star
+    review with no help on what to write back. This endpoint bridges that gap.
+
+    The draft is intentionally ephemeral (not stored). Authors edit it before
+    posting, so persisting the raw LLM output would create false expectations.
+    Multi-tenant: verifies the review belongs to a book owned by this author.
+    """
+    result = await db.execute(
+        select(Review, Book, ReviewAnalysis)
+        .join(Book, Book.id == Review.book_id)
+        .outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
+        .where(
+            Review.id == uuid.UUID(review_id),
+            Book.author_id == author.id,
+        )
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
+
+    review, book, analysis = row.Review, row.Book, row.ReviewAnalysis
+
+    if not analysis or not analysis.is_actionable:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Draft replies are only available for reviews marked actionable.",
+        )
+
+    provider = get_llm_provider()
+    draft = await provider.draft_reply(review.body, book.title)
+    log.info("review.draft_reply.generated", review_id=review_id, tone=draft.tone)
+
+    return DraftReplyResponse(
+        review_id=review_id,
+        reply=draft.reply,
+        tone=draft.tone,
+    )

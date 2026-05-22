@@ -7,7 +7,7 @@ from groq import AsyncGroq, RateLimitError, APIStatusError
 import google.generativeai as genai
 
 from app.core.config import settings
-from app.llm.base import LLMProvider, ReviewAnalysisResult
+from app.llm.base import DraftReplyResult, LLMProvider, ReviewAnalysisResult
 
 log = structlog.get_logger(__name__)
 
@@ -17,6 +17,12 @@ _GROQ_PRICING: dict[str, dict[str, float]] = {
     "mixtral-8x7b-32768":      {"input": 0.24, "output": 0.24},
 }
 _DEFAULT_PRICING = {"input": 0.59, "output": 0.79}
+
+_DRAFT_REPLY_SYSTEM = (
+    "You are an author's personal PR assistant. Write a brief, gracious public reply "
+    "to a book review on behalf of the author. Be warm, professional, never defensive. "
+    "Acknowledge specific points raised. Keep it 80-120 words. Write in first person."
+)
 
 _SYSTEM_PROMPT = (
     "You are an expert literary analyst helping independent authors understand "
@@ -106,6 +112,29 @@ class GroqProvider(LLMProvider):
         )
 
         return ReviewAnalysisResult.model_validate(json.loads(raw))
+
+    # ── Draft reply ────────────────────────────────────────────────────────────
+
+    async def draft_reply(self, review_text: str, book_title: str) -> DraftReplyResult:
+        schema = DraftReplyResult.model_json_schema()
+
+        async def _call():
+            return await self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": _DRAFT_REPLY_SYSTEM},
+                    {"role": "user", "content": f"Book: '{book_title}'\n\nReview:\n{review_text}"},
+                ],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"name": "DraftReply", "schema": schema, "strict": True},
+                },
+                temperature=0.7,
+            )
+
+        response = await _with_backoff(_call)
+        log.info("llm.draft_reply.complete", model=self._model)
+        return DraftReplyResult.model_validate(json.loads(response.choices[0].message.content))
 
     # ── Embeddings (via Google) ────────────────────────────────────────────────
 

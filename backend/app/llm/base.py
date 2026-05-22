@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field
 from app.core.config import settings
 
 
-# ── Structured output schema ───────────────────────────────────────────────────
-# Every LLM provider must return a response that validates against this model.
-# We pass this schema to each provider's native structured-output API so no
+# ── Structured output schemas ──────────────────────────────────────────────────
+# Every LLM provider must return responses that validate against these models.
+# We pass schemas to each provider's native structured-output API so no
 # string parsing is needed — if the model returns garbage, Pydantic raises.
 
 class ReviewAnalysisResult(BaseModel):
@@ -44,6 +44,15 @@ class ReviewAnalysisResult(BaseModel):
     )
 
 
+class DraftReplyResult(BaseModel):
+    reply: str = Field(
+        description="The drafted reply, 80-120 words, professional and warm."
+    )
+    tone: Literal["professional", "warm", "empathetic"] = Field(
+        description="The dominant tone of the reply."
+    )
+
+
 # ── Abstract provider interface ────────────────────────────────────────────────
 
 class LLMProvider(ABC):
@@ -58,6 +67,15 @@ class LLMProvider(ABC):
         Run structured analysis on a single review body.
         Must return a validated ReviewAnalysisResult.
         Implementations are responsible for retries and rate-limit handling.
+        """
+        ...
+
+    @abstractmethod
+    async def draft_reply(self, review_text: str, book_title: str) -> DraftReplyResult:
+        """
+        Generate a draft public reply to an actionable review, written in first
+        person as the author. Returned text is ~80-120 words, ready to post on
+        Amazon/Goodreads after light editing.
         """
         ...
 
